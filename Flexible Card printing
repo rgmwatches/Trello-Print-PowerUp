@@ -1,0 +1,82 @@
+/* global TrelloPowerUp */
+
+const ICON_URL = 'https://example.com/print-icon.png'; // Replace with your icon URL
+
+window.TrelloPowerUp.initialize({
+  'card-buttons': function(t) {
+    return [{
+      icon: ICON_URL,
+      text: 'Print Card',
+      callback: function(t) {
+        return t.card('id', 'name', 'desc', 'labels', 'members', 'due', 'attachments')
+          .then(card => Promise.all([
+            t.board('name'),
+            t.list('name'),
+            t.getChecklists(card.id),
+            t.get('card', 'shared', 'customFields'), // Requires Custom Fields Power-Up
+            t.getComments(card.id) // Requires API call via backend
+          ]).then(([board, list, checklists, customFields, comments]) => {
+            
+            // Build selection popup
+            const items = [
+              { text: 'Board Name', callback: () => printOptions.boardName = board.name },
+              { text: 'List Name', callback: () => printOptions.listName = list.name },
+              { text: 'Card Number', callback: () => printOptions.cardNumber = card.idShort },
+              { text: 'Title', callback: () => printOptions.title = card.name },
+              { text: 'Labels', callback: () => printOptions.labels = card.labels },
+              { text: 'Members', callback: () => printOptions.members = card.members },
+              { text: 'Due Date', callback: () => printOptions.due = card.due },
+              { text: 'Description', callback: () => printOptions.description = card.desc },
+              { text: 'Custom Fields', callback: () => printOptions.customFields = customFields },
+              { text: 'Attachments', callback: () => printOptions.attachments = card.attachments },
+              { text: 'Comments', callback: () => printOptions.comments = comments },
+              ...checklists.map(cl => ({
+                text: `Checklist: ${cl.name}`,
+                callback: () => {
+                  if (!printOptions.checklists) printOptions.checklists = [];
+                  printOptions.checklists.push(cl);
+                }
+              }))
+            ];
+
+            return t.popup({
+              title: 'Select Items to Print',
+              items: items,
+              search: false
+            }).then(() => {
+              generatePrintHTML(printOptions);
+            });
+          }));
+      }
+    }];
+  }
+});
+
+let printOptions = {};
+
+function generatePrintHTML(options) {
+  let html = `
+    <html>
+      <head>
+        <title>Print Card</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          h1 { font-size: 22px; }
+          h2 { font-size: 18px; margin-top: 20px; }
+          ul { list-style-type: none; padding: 0; }
+          li { margin: 5px 0; }
+        </style>
+      </head>
+      <body>
+  `;
+
+  if (options.boardName) html += `<h2>Board: ${options.boardName}</h2>`;
+  if (options.listName) html += `<h2>List: ${options.listName}</h2>`;
+  if (options.cardNumber) html += `<p>Card #${options.cardNumber}</p>`;
+  if (options.title) html += `<h1>${options.title}</h1>`;
+  if (options.labels) html += `<p>Labels: ${options.labels.map(l => l.name).join(', ')}</p>`;
+  if (options.members) html += `<p>Members: ${options.members.map(m => m.fullName).join(', ')}</p>`;
+  if (options.due) html += `<p>Due Date: ${new Date(options.due).toLocaleString()}</p>`;
+  if (options.description) html += `<p>${options.description}</p>`;
+  if (options.customFields) html += `<h2>Custom Fields</h2><ul>${options.customFields.map(cf => `<li>${cf.name}: ${cf.value}</li>`).join('')}</ul>`;
+  if (options.attachments) html += `<h2>Attachments</h2><ul>${options.attachments.map(att => `<li><a href="${att.url}" target="_blank">${
